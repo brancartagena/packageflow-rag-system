@@ -1,0 +1,212 @@
+# Golden questions for retrieval and answer evaluation (scripts/evaluate.py).
+#
+# expected_chunks: chunk_ids that SHOULD come back near the top. A question is a
+# hit if ANY of them is in the top k. A trailing * matches a prefix
+# (e.g. "api:overview:design-rules:*"). Chunk ids are in data/processed/chunks.jsonl.
+# If you change chunking, evaluate.py warns about ids that no longer exist.
+#
+# category out_of_scope = the docs can't answer it; the bot should say so.
+# Questions are worded the way a person would ask, not copied from the docs,
+# so keyword search doesn't get a free pass.
+
+- id: q01
+  question: Who is allowed to link a package that came in without an order match to its procurement order?
+  category: roles
+  expected_chunks: ["api:op:POST /packages/{packageId}/match"]
+
+- id: q02
+  question: What columns are in the exception_case table?
+  category: data_model
+  expected_chunks: ["erd:entity-exception-case:1", "tech_arch:7-database-model:row11"]
+
+- id: q03
+  question: Why doesn't PackageFlow use one transaction across its database and the procurement system?
+  category: architecture
+  expected_chunks: ["cloud_arch:5-no-distributed-transaction-with-procur:1"]
+
+- id: q04
+  question: How will we know the initiative was successful?
+  category: requirements
+  expected_chunks: ["brd:11-success-criteria:1"]
+
+- id: q05
+  question: How does a requester confirm they actually got their package?
+  category: requirements
+  expected_chunks: ["api:op:POST /packages/{packageId}/acknowledgement", "brd:8-functional-requirements:row9", "brd:7-users-and-user-stories:row4"]
+
+- id: q06
+  question: What happens if a delivery photo upload gets interrupted halfway?
+  category: architecture
+  expected_chunks: ["tech_arch:11-background-jobs-and-notifications:1", "tech_arch:9-mobile-application-requirements:1", "api:op:POST /packages/{packageId}/evidence/{evidenceId}/complete", "api:op:POST /packages/{packageId}/evidence"]
+
+- id: q07
+  question: Which database engine stores the transactional package data?
+  category: architecture
+  expected_chunks: ["cloud_arch:2-postgresql-is-the-transactional-source:1", "cloud_arch:service-deployment-mapping:row8", "tech_arch:3-proposed-technology-stack:row5"]
+
+- id: q08
+  question: What is the Idempotency-Key header used for?
+  category: api
+  expected_chunks: ["api:conventions:1", "api:overview:design-rules:*"]
+
+- id: q09
+  question: After a package is Received, what states can it move to next?
+  category: lifecycle
+  expected_chunks: ["tech_arch:6-lifecycle-and-workflow-definition:row1", "tech_arch:6-lifecycle-and-workflow-definition:1", "api:overview:package-lifecycle:1", "api:schema:PackageState"]
+
+- id: q10
+  question: What project risks does the BRD call out?
+  category: requirements
+  expected_chunks: ["brd:10-risks:1"]
+
+- id: q11
+  question: Who is the business sponsor and who is the business analyst?
+  category: requirements
+  expected_chunks: ["brd:6-stakeholders:1", "brd:info"]
+
+- id: q12
+  question: What is explicitly out of scope for this project?
+  category: requirements
+  expected_chunks: ["brd:5-2-out-of-scope:1", "tech_arch:2-scope-and-boundaries:1"]
+
+- id: q13
+  question: Can the Facilities Lead assign a bunch of packages in one go?
+  category: api
+  expected_chunks: ["api:op:POST /assignments/batch"]
+
+- id: q14
+  question: How does a delivery team member see the packages assigned to them, by building?
+  category: api
+  expected_chunks: ["api:op:GET /delivery/my-work", "brd:7-users-and-user-stories:row2"]
+
+- id: q15
+  question: Which table records a package being handed from one person to another?
+  category: data_model
+  expected_chunks: ["erd:entity-custody-event:1", "tech_arch:7-database-model:row6"]
+
+- id: q16
+  question: How is a package record connected to its procurement order in the database?
+  category: data_model
+  expected_chunks: ["erd:entity-procurement-order-ref:1", "erd:entity-package-record:1", "erd:all-relationships:row15", "tech_arch:8-key-relationships-and-rules:1"]
+
+- id: q17
+  question: Through which channels does the requester get notified, and when?
+  category: requirements
+  expected_chunks: ["brd:8-functional-requirements:row8", "brd:5-1-in-scope-confirmed:1"]
+
+- id: q18
+  question: What Azure service is proposed for publishing domain events?
+  category: architecture
+  expected_chunks: ["cloud_arch:service-deployment-mapping:row5"]
+
+- id: q19
+  question: Where do the delivery photos get stored?
+  category: architecture
+  expected_chunks: ["cloud_arch:3-object-storage-holds-evidence-not-the:1", "tech_arch:3-proposed-technology-stack:row6", "cloud_arch:service-deployment-mapping:row9", "erd:entity-evidence-item:1"]
+
+- id: q20
+  question: How is the inspection of a hazardous or controlled item recorded?
+  category: api
+  expected_chunks: ["api:op:POST /packages/{packageId}/restricted/inspection"]
+
+- id: q21
+  question: How do actions taken offline get sent to the server later?
+  category: api
+  expected_chunks: ["api:op:POST /sync/commands", "api:tag:offline-sync", "tech_arch:9-mobile-application-requirements:1"]
+
+- id: q22
+  question: What framework is proposed for building the iPhone and Android app?
+  category: architecture
+  expected_chunks: ["tech_arch:3-proposed-technology-stack:row1"]
+
+- id: q23
+  question: What technical decisions are still open?
+  category: architecture
+  expected_chunks: ["tech_arch:13-open-technical-decisions:1"]
+
+- id: q24
+  question: How long does it take today to track down a package that can't be found?
+  category: requirements
+  expected_chunks: ["brd:3-business-need-statement:1"]
+
+- id: q25
+  question: Does the package lifecycle database favor consistency or availability during a network partition?
+  category: architecture
+  expected_chunks: ["cloud_arch:cap-theorem-and-consistency-decisions:*", "cloud_arch:practical-cap-position:1"]
+
+- id: q26
+  question: Can a package be marked Delivered without a photo?
+  category: lifecycle
+  expected_chunks: ["tech_arch:8-key-relationships-and-rules:1", "api:op:POST /packages/{packageId}/deliver", "api:schema:EvidenceGate", "tech_arch:9-mobile-application-requirements:1"]
+
+- id: q27
+  question: What does the audit_event table keep track of?
+  category: data_model
+  expected_chunks: ["erd:entity-audit-event:1", "tech_arch:7-database-model:row12"]
+
+- id: q28
+  question: How do you fix a wrong fact on a package without erasing its history?
+  category: api
+  expected_chunks: ["api:op:POST /packages/{packageId}/corrections", "tech_arch:8-key-relationships-and-rules:1"]
+
+- id: q29
+  question: What environments will the system run in?
+  category: architecture
+  expected_chunks: ["tech_arch:12-environments-and-delivery-controls:1", "api:conventions:1"]
+
+- id: q30
+  question: In what order should the system be implemented?
+  category: architecture
+  expected_chunks: ["tech_arch:15-recommended-implementation-sequence:1"]
+
+- id: q31
+  question: What does evidenceGate on a package tell the mobile app?
+  category: api
+  expected_chunks: ["api:schema:EvidenceGate", "api:schema:Package"]
+
+- id: q32
+  question: Do the ERD and the technical architecture doc disagree about how a package stores its location?
+  category: data_model
+  expected_chunks: ["erd:differences-between-the-erd-and-the-tech:1"]
+
+- id: q33
+  question: How does the person at the dock figure out which order a box belongs to?
+  category: requirements
+  expected_chunks: ["api:op:POST /orders/search", "brd:7-users-and-user-stories:row1", "brd:8-functional-requirements:row1"]
+
+- id: q34
+  question: Who can cancel a package receipt that was entered by mistake?
+  category: roles
+  expected_chunks: ["api:op:POST /packages/{packageId}/cancel"]
+
+- id: q35
+  question: How does the Facilities Lead see notifications that failed to send?
+  category: api
+  expected_chunks: ["api:op:GET /notifications/failures"]
+
+# ---- out of scope: the docs don't answer these, the bot should say so ----
+
+- id: o01
+  question: What is the delivery team's hourly pay rate?
+  category: out_of_scope
+  expected_chunks: []
+
+- id: o02
+  question: How many packages did PackageFlow deliver last month?
+  category: out_of_scope
+  expected_chunks: []
+
+- id: o03
+  question: What is the approved budget for the PackageFlow project?
+  category: out_of_scope
+  expected_chunks: []
+
+- id: o04
+  question: Which brand of handheld barcode scanner should we buy?
+  category: out_of_scope
+  expected_chunks: []
+
+- id: o05
+  question: What is the weather forecast for the receiving dock this week?
+  category: out_of_scope
+  expected_chunks: []
