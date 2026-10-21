@@ -1,0 +1,36 @@
+# PackageFlow RAG System
+# Tested on Python 3.13 and 3.15.
+# Install: pip install -r requirements.txt
+
+# --- Local LLM + embeddings (talks to your Ollama server) ---
+ollama>=0.6,<1.0
+
+# --- Vector store (local mode, no server needed) ---
+qdrant-client>=1.19,<2.0
+
+# --- Keyword search for hybrid retrieval ---
+rank-bm25>=0.2.2,<0.3
+
+# --- Document loaders ---
+python-docx>=1.2,<2.0        # BRD + Technical Architecture .docx
+ruamel.yaml>=0.18,<1.0       # OpenAPI spec + eval questions. Pure Python, installs on Python 3.15
+                             # (PyYAML has no Python 3.15 wheel yet, which is why it failed to install)
+
+# --- Config ---
+pydantic>=2.10,<3.0
+pydantic-settings>=2.6,<3.0
+python-dotenv>=1.0,<2.0
+
+# --- CLI ---
+typer>=0.15,<1.0
+rich>=13.0
+
+# --- UI (Phase 5) ---
+streamlit>=1.40,<2.0
+
+# --- Dev / tests ---
+pytest>=8.0
+
+# --- Optional, NOT installed by default ---
+# chromadb>=1.5            # swap-in alternative to Qdrant
+# sentence-transformers    # Phase 7 reranker (pulls in PyTorch, ~2 GB)
