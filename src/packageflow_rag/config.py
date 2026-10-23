@@ -45,6 +45,12 @@ class Settings(BaseSettings):
 
     # Generation
     answer_reserve_tokens: int = 1024      # room left in num_ctx for the answer + prompt text
+    answer_max_tokens: int = 350           # hard cap on answer length (stops the model from rambling or copying sources)
+
+    # Guardrails (see guardrails.py)
+    guard_input: bool = True               # drop coding / off-topic / "ignore your instructions" requests before the model
+    require_term_overlap: bool = True      # say "not covered" if no question keyword appears in any retrieved chunk
+    require_citations: bool = True         # say "not covered" if the model answers without citing a source
 
     def resolve(self, p: Path) -> Path:
         """Expand ~ and make relative paths relative to the project root."""

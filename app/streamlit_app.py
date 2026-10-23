@@ -213,6 +213,8 @@ if not st.session_state.messages and not question:
 
 for m in st.session_state.messages:
     with st.chat_message(m["role"], avatar=":material/auto_awesome:" if m["role"] == "assistant" else None):
+        if m.get("notice"):
+            st.caption(m["notice"])
         st.markdown(m["content"])
         if m["role"] == "assistant":
             render_sources(m.get("sources", []), show_all)
@@ -233,29 +235,37 @@ if question:
             else:
                 history = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[:-1]]
                 resp = rag.ask(question, top_k, doc_types or None, roles or None, history, mode)
-                with st.spinner("Thinking..."):
-                    first = None
-                    it = iter(resp)
-                    try:
-                        first = next(it)
-                    except StopIteration:
-                        pass
-                if first is not None:
-                    def _rest():
-                        yield first
-                        yield from it
-                    st.write_stream(_rest())
-                else:
+                if resp.notice:
+                    st.caption(resp.notice)
+                if resp.gated:                       # a guardrail answered, the model was not called
                     st.markdown(resp.text)
-                if resp.gated:
-                    st.caption(f"Best match score {resp.retrieval.best_dense_score:.3f} is below "
-                               f"MIN_DENSE_SCORE={settings.min_dense_score}, so the model wasn't asked.")
+                    reasons = {
+                        "no_term_overlap": "None of the key words in your question appear in the docs I searched.",
+                        "no_chunks": "Nothing in the docs matched your question.",
+                        "low_score": (f"Best match score {resp.retrieval.best_dense_score:.3f} is below "
+                                      f"MIN_DENSE_SCORE={settings.min_dense_score}."),
+                    }
+                    if resp.gate_reason in reasons:
+                        st.caption(reasons[resp.gate_reason])
+                else:
+                    box = st.empty()
+                    it = iter(resp)
+                    with st.spinner("Thinking..."):
+                        acc = next(it, "")
+                    box.markdown(acc + "▌")
+                    for tok in it:
+                        acc += tok
+                        box.markdown(acc + "▌")
+                    box.markdown(resp.text)          # the cleaned answer replaces the raw stream
             sources = source_payload(resp) if not retrieval_only else [
                 {"n": i, "cited": False, "citation": rc.chunk.citation, "text": rc.chunk.text,
                  "dense_rank": rc.dense_rank, "bm25_rank": rc.bm25_rank, "dense_score": rc.dense_score}
                 for i, rc in enumerate(resp.sources, 1)]
+            if not retrieval_only and resp.not_covered:
+                sources = []                         # "not covered" answers shouldn't list unrelated sources
             render_sources(sources, show_all or retrieval_only)
-            st.session_state.messages.append({"role": "assistant", "content": resp.text, "sources": sources})
+            st.session_state.messages.append({"role": "assistant", "content": resp.text, "sources": sources,
+                                              "notice": getattr(resp, "notice", "")})
         except OllamaError as e:
             st.error(str(e))
             st.session_state.messages.pop()

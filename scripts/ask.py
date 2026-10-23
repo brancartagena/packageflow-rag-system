@@ -57,9 +57,17 @@ def run_one(rag: RAG, question: str, doc_type, role, top_k, retrieval_only, mode
     for tok in resp:
         console.print(tok, end="", markup=False, highlight=False)
     console.print("\n")
-    if resp.gated:
+    if resp.raw and resp.text != resp.raw:
+        console.rule("Cleaned answer")
+        console.print(resp.text, markup=False, highlight=False)
+        console.print(f"[dim](guardrail fixes: {', '.join(resp.fixes) or 'trimmed'})[/]")
+    if resp.notice:
+        console.print(f"[dim]{resp.notice}[/]")
+    if resp.gated and resp.gate_reason == "low_score":
         console.print(f"[dim](best match score {resp.retrieval.best_dense_score:.3f} is below "
                       f"MIN_DENSE_SCORE={settings.min_dense_score})[/]")
+    elif resp.gated:
+        console.print(f"[dim](guardrail: {resp.gate_reason}, model not called)[/]")
     show_sources(resp)
     return resp.text
 

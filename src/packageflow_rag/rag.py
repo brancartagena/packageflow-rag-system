@@ -19,6 +19,7 @@ from .chunking import approx_tokens
 from .config import Settings, settings as default_settings
 from .embeddings import OllamaEmbedder
 from .generation import OllamaGenerator, cited_numbers
+from .guardrails import check_question, clean_answer, has_term_overlap
 from .models import RetrievedChunk
 from .prompts import NOT_COVERED, SYSTEM_PROMPT, build_messages
 from .retrieval import RetrievalResult, Retriever
@@ -32,7 +33,13 @@ class Response:
     sources: list[RetrievedChunk] = field(default_factory=list)
     text: str = ""
     cited: list[int] = field(default_factory=list)
-    gated: bool = False               # True when the min_dense_score gate answered "not covered"
+    gated: bool = False               # True when a guardrail answered without calling the model
+    blocked: bool = False             # True when the input guardrail refused the request
+    notice: str = ""                  # shown above the answer, e.g. "I skipped the part about coding"
+    gate_reason: str = ""             # why a guardrail fired: input | no_chunks | low_score | no_term_overlap
+    raw: str = ""                     # exactly what the model streamed, before clean-up
+    fixes: list[str] = field(default_factory=list)  # output clean-ups applied to the model's text
+    require_citations: bool = True
     _stream: Iterator[str] | None = None
     _on_done: object = None
 
@@ -46,7 +53,8 @@ class Response:
         for tok in self._stream:
             parts.append(tok)
             yield tok
-        self.text = "".join(parts)
+        raw = self.raw = "".join(parts)
+        self.text, self.fixes = clean_answer(raw, len(self.sources), self.require_citations)
         self.cited = cited_numbers(self.text, len(self.sources))
         self.retrieval.timings_ms["generate"] = (time.perf_counter() - t0) * 1000
         self._stream = None
@@ -74,7 +82,7 @@ class RAG:
         if check_model:
             self.store.check_model(getattr(self.embedder, "model", c.embed_model))
         self.generator = generator or OllamaGenerator(c.ollama_chat_model, c.ollama_host, c.ollama_num_ctx,
-                                                      c.llm_temperature, c.ollama_timeout)
+                                                      c.llm_temperature, c.ollama_timeout, c.answer_max_tokens)
         self.retriever = Retriever(self.store, self.embedder, c.candidate_k, c.rrf_k)
 
     @property
@@ -87,18 +95,38 @@ class RAG:
 
     def ask(self, question: str, top_k: int | None = None, doc_types: list[str] | None = None,
             roles: list[str] | None = None, history: list[dict] | None = None, mode: str = "hybrid") -> Response:
-        result = self.retrieve(question, top_k, doc_types, roles, mode)
-        resp = Response(question=question, retrieval=result, _on_done=self._log)
-
-        best = result.best_dense_score
-        threshold = self.cfg.min_dense_score
-        if not result.chunks or (threshold > 0 and best is not None and best < threshold):
-            resp.gated = True
-            resp.text = NOT_COVERED
+        c = self.cfg
+        guard = check_question(question) if c.guard_input else None
+        q = guard.clean if guard else question
+        if guard and guard.blocked:
+            resp = Response(question=question, retrieval=RetrievalResult(chunks=[], mode=mode),
+                            gated=True, blocked=True, gate_reason="input", text=guard.reply)
             self._log(resp)
             return resp
 
-        messages, used = build_messages(question, result.chunks, self.context_budget, history)
+        result = self.retrieve(q, top_k, doc_types, roles, mode)
+        resp = Response(question=question, retrieval=result, _on_done=self._log,
+                        notice=guard.notice if guard else "", require_citations=c.require_citations)
+
+        best = result.best_dense_score
+        threshold = c.min_dense_score
+        reason = ""
+        if not result.chunks:
+            reason = "no_chunks"
+        elif threshold > 0 and best is not None and best < threshold:
+            reason = "low_score"
+        elif c.require_term_overlap and not has_term_overlap(q, [rc.chunk.text for rc in result.chunks]):
+            reason = "no_term_overlap"
+        if reason:
+            resp.gated, resp.gate_reason, resp.text = True, reason, NOT_COVERED
+            self._log(resp)
+            return resp
+
+        clean_history = None
+        if history:
+            clean_history = [dict(h, content=check_question(h["content"]).clean or h["content"]) if h["role"] == "user" else h
+                             for h in history]
+        messages, used = build_messages(q, result.chunks, self.context_budget, clean_history)
         resp.sources = used
         resp._stream = self.generator.stream(messages)
         return resp
@@ -119,6 +147,9 @@ class RAG:
                 "cited": resp.cited,
                 "best_dense_score": resp.retrieval.best_dense_score,
                 "gated": resp.gated,
+                "gate_reason": resp.gate_reason,
+                "blocked": resp.blocked,
+                "output_fixes": resp.fixes,
                 "not_covered": resp.not_covered,
                 "answer_chars": len(resp.text),
                 "timings_ms": {k: round(v, 1) for k, v in resp.retrieval.timings_ms.items()},
