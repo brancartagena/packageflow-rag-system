@@ -46,7 +46,9 @@ CSS = """
 }
 html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] { background: var(--bg); color: var(--ink); }
 [data-testid="stHeader"] { background: transparent; }
-[data-testid="stToolbar"], [data-testid="stDecoration"], footer, #MainMenu { display: none !important; }
+[data-testid="stDecoration"], footer, #MainMenu, [data-testid="stMainMenu"], [data-testid="stAppDeployButton"], .stDeployButton { display: none !important; }
+/* keep the arrow that reopens the sidebar visible (hiding the whole toolbar used to hide it too) */
+[data-testid="stExpandSidebarButton"], [data-testid="collapsedControl"] { display: flex !important; visibility: visible !important; }
 html, body, .stMarkdown, p, li, label, button, input, textarea {
   font-family: -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
 }
@@ -242,7 +244,7 @@ if question:
                     reasons = {
                         "no_term_overlap": "None of the key words in your question appear in the docs I searched.",
                         "no_chunks": "Nothing in the docs matched your question.",
-                        "low_score": (f"Best match score {resp.retrieval.best_dense_score:.3f} is below "
+                        "low_score": (f"Best match score {resp.retrieval.best_dense_score or 0:.3f} is below "
                                       f"MIN_DENSE_SCORE={settings.min_dense_score}."),
                     }
                     if resp.gate_reason in reasons:
