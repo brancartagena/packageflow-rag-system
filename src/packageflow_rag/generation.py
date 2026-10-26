@@ -14,17 +14,20 @@ CITE_RE = re.compile(r"\[(\d{1,2})\]")
 
 class OllamaGenerator:
     def __init__(self, model: str, host: str = "http://localhost:11434", num_ctx: int = 8192,
-                 temperature: float = 0.1, timeout: float = 300.0, max_tokens: int | None = None):
+                 temperature: float = 0.1, timeout: float = 300.0, max_tokens: int | None = None,
+                 keep_alive: str | None = None):
         self.model = model
         self.host = host
         self.options = {"num_ctx": num_ctx, "temperature": temperature}
+        self.keep_alive = keep_alive
         if max_tokens:
             self.options["num_predict"] = max_tokens
         self.client = ollama.Client(host=host, timeout=timeout)
 
     def stream(self, messages: list[dict]) -> Iterator[str]:
         try:
-            for part in self.client.chat(model=self.model, messages=messages, stream=True, options=self.options):
+            for part in self.client.chat(model=self.model, messages=messages, stream=True, options=self.options,
+                                         keep_alive=self.keep_alive):
                 text = part["message"].get("content") or ""
                 if text:
                     yield text

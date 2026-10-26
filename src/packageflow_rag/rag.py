@@ -19,7 +19,7 @@ from .chunking import approx_tokens
 from .config import Settings, settings as default_settings
 from .embeddings import OllamaEmbedder
 from .generation import OllamaGenerator, cited_numbers
-from .guardrails import check_question, clean_answer, has_term_overlap
+from .guardrails import check_question, clean_answer, has_term_overlap, search_text
 from .models import RetrievedChunk
 from .prompts import NOT_COVERED, SYSTEM_PROMPT, build_messages
 from .retrieval import RetrievalResult, Retriever
@@ -82,7 +82,8 @@ class RAG:
         if check_model:
             self.store.check_model(getattr(self.embedder, "model", c.embed_model))
         self.generator = generator or OllamaGenerator(c.ollama_chat_model, c.ollama_host, c.ollama_num_ctx,
-                                                      c.llm_temperature, c.ollama_timeout, c.answer_max_tokens)
+                                                      c.llm_temperature, c.ollama_timeout, c.answer_max_tokens,
+                                                      c.ollama_keep_alive)
         self.retriever = Retriever(self.store, self.embedder, c.candidate_k, c.rrf_k)
 
     @property
@@ -104,7 +105,8 @@ class RAG:
             self._log(resp)
             return resp
 
-        result = self.retrieve(q, top_k, doc_types, roles, mode)
+        search_q = search_text(q, history)     # a short follow-up borrows the previous question for the search
+        result = self.retrieve(search_q, top_k, doc_types, roles, mode)
         resp = Response(question=question, retrieval=result, _on_done=self._log,
                         notice=guard.notice if guard else "", require_citations=c.require_citations)
 
@@ -115,7 +117,7 @@ class RAG:
             reason = "no_chunks"
         elif threshold > 0 and best is not None and best < threshold:
             reason = "low_score"
-        elif c.require_term_overlap and not has_term_overlap(q, [rc.chunk.text for rc in result.chunks]):
+        elif c.require_term_overlap and not has_term_overlap(search_q, [rc.chunk.text for rc in result.chunks]):
             reason = "no_term_overlap"
         if reason:
             resp.gated, resp.gate_reason, resp.text = True, reason, NOT_COVERED

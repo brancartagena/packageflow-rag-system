@@ -32,6 +32,7 @@ SKIPPED_NOTICE = "I skipped the part of your message that isn't about the Packag
 
 _INJECTION_RE = re.compile(
     r"ignore\s+(all\s+|any\s+|the\s+|your\s+)*(previous|prior|above|earlier|system)\s+(instructions?|rules?|prompts?)"
+    r"|ignore\s+(all\s+|any\s+)?your\s+(instructions?|rules?|prompts?)"
     r"|disregard\s+.{0,40}(instructions?|rules?|prompt)"
     r"|(reveal|show|print|repeat|output|tell me)\s+.{0,30}(system prompt|your (instructions|rules|prompt))"
     r"|\byou\s+are\s+now\b|\bfrom\s+now\s+on\s+you\b|\bact\s+as\s+(if|though)\b|\bpretend\s+(to\s+be|you)\b"
@@ -46,10 +47,14 @@ _OFF_TOPIC_RE = re.compile(
     rf"|\b({_LANGS})\s+(script|program|function|code|snippet|class|algorithm)\b"
     r"|\b(write|compose|tell)\b[^.?!]{0,30}\b(poem|story|essay|joke|song|haiku|limerick)\b"
     r"|\b(solve|calculate)\b[^.?!]{0,30}\b(equation|integral|derivative|math\s+problem)\b"
-    r"|\b(translate|recipe|horoscope|weather\s+forecast|lottery)\b",
+    r"|\btranslate\b[^.?!]{0,60}\b(into|to)\s+(spanish|french|german|italian|portuguese|chinese|japanese|korean|russian|arabic)\b"
+    r"|\b(recipe|horoscope|weather\s+forecast|lottery)\b",
     re.I,
 )
 _LEAD_CONNECTOR_RE = re.compile(r"^\s*(but|and|also|then|first|so|ok(ay)?|please)\b[\s,]*(before doing so|after that|after)?[\s,]*", re.I)
+# One sentence can hold a real question and an off-topic request ("..., but first solve ..."): split it at these words.
+_CLAUSE_SPLIT_RE = re.compile(r"\s*,?\s+(?:but|and|then|also|plus)\b[\s,]*", re.I)
+_QUESTION_START_RE = re.compile(r"^(who|what|when|where|why|how|which|can|could|does|do|did|is|are|will|should|would|tell\s+me|explain|describe|list|show\s+me)\b", re.I)
 
 
 @dataclass
@@ -74,7 +79,17 @@ def check_question(question: str) -> QuestionCheck:
         return QuestionCheck(blocked=True, reply=OFF_TOPIC_REPLY, dropped=[q])
     kept, dropped = [], []
     for s in re.split(r"(?<=[.?!])\s+", q):
-        (dropped if _OFF_TOPIC_RE.search(s) else kept).append(s)
+        if not _OFF_TOPIC_RE.search(s):
+            kept.append(s)
+            continue
+        dropped.append(s)
+        parts = _CLAUSE_SPLIT_RE.split(s)
+        good = [p.strip(" ,;") for p in parts if not _OFF_TOPIC_RE.search(p)]
+        good = [p for p in good if any(ch.isalnum() for ch in p)]
+        if good and len(good) < len(parts):      # some clauses are fine: keep them if they still read as a question
+            text = " and ".join(good)
+            if _QUESTION_START_RE.match(text) or text.endswith("?"):
+                kept.append(text if text[-1] in ".?!" else text + "?")
 
     clean = " ".join(kept)
     clean = _LEAD_CONNECTOR_RE.sub("", clean).strip()
@@ -121,6 +136,33 @@ def has_term_overlap(question: str, chunk_texts: list[str]) -> bool:
     for t in chunk_texts:
         haystack |= _terms(t)
     return bool(distinctive & haystack)
+
+
+# ---------- 2b. follow-up questions ----------
+
+_FOLLOWUP_OPENER_RE = re.compile(r"^\s*(and|also|then|so|but|what about|how about|what if)\b", re.I)
+_PRONOUN_RE = re.compile(r"\b(it|its|they|them|their|those|these|he|she)\b", re.I)
+_WH_RE = re.compile(r"^\s*(who|what|when|where|why|how|which)\b", re.I)
+
+
+def search_text(question: str, history: list[dict] | None) -> str:
+    """Text to search with. A short follow-up ("what about the Facilities Lead?") means nothing on its
+    own, so it borrows the last real question from the chat. Full questions are left alone."""
+    words = question.split()
+    if not history or not words:
+        return question
+    follow_up = (bool(_FOLLOWUP_OPENER_RE.match(question))
+                 or (len(words) <= 8 and bool(_PRONOUN_RE.search(question)))
+                 or (len(words) <= 3 and not _WH_RE.match(question)))
+    if not follow_up:
+        return question
+    for turn in reversed(history):
+        if turn.get("role") != "user":
+            continue
+        prev = check_question(turn.get("content", ""))
+        if not prev.blocked and prev.clean:
+            return f"{prev.clean} {question}"
+    return question
 
 
 # ---------- 3. output ----------

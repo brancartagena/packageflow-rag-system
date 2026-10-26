@@ -12,6 +12,8 @@ Metrics:
   hit@k  share of questions where at least one expected chunk is in the top k
   MRR    1 / rank of the first expected chunk (1.0 = always first)
   Out-of-scope questions are used to suggest a MIN_DENSE_SCORE threshold.
+  must_include (optional, in golden_questions.yaml) lists words a correct answer should contain.
+  --answers checks them, so an answer must be cited AND contain those words to count as correct.
 """
 
 import _path  # noqa: F401
@@ -35,6 +37,7 @@ from packageflow_rag.vectorstore import VectorStore
 app = typer.Typer(add_completion=False)
 console = Console()
 GOLDEN = PROJECT_ROOT / "eval" / "golden_questions.yaml"
+REFUSE_CATEGORIES = ("out_of_scope", "guardrail")   # questions the bot should refuse with "not covered"
 
 
 def load_golden(path: Path = GOLDEN) -> list[dict]:
@@ -115,17 +118,24 @@ def print_report(model: str, rep: dict, k: int) -> None:
         console.print("  hybrid misses: " + ", ".join(f"{p['id']} (got {p['top3'][0] if p['top3'] else '-'})" for p in misses))
 
 
+def missing_terms(answer: str, must_include: list[str] | None) -> list[str]:
+    """Words the answer should contain but doesn't. Case-insensitive; "a|b" means either one is fine."""
+    low = (answer or "").lower()
+    return [t for t in must_include or [] if not any(alt.strip().lower() in low for alt in t.split("|"))]
+
+
 def run_answers(golden: list[dict]) -> dict:
     from packageflow_rag.rag import RAG
 
     rag = RAG()
-    rows, ok_in, ok_out, n_in, n_out = [], 0, 0, 0, 0
+    rows, ok_in, ok_out, n_in, n_out, ok_kw, n_kw = [], 0, 0, 0, 0, 0, 0
     try:
         for q in golden:
             t0 = time.perf_counter()
             resp = rag.ask(q["question"]).consume()
             secs = time.perf_counter() - t0
-            if q.get("category") == "out_of_scope":
+            missing: list[str] = []
+            if q.get("category") in REFUSE_CATEGORIES:
                 n_out += 1
                 good = resp.not_covered
                 ok_out += good
@@ -133,12 +143,18 @@ def run_answers(golden: list[dict]) -> dict:
                 n_in += 1
                 good = (not resp.not_covered) and bool(resp.cited)
                 ok_in += good
-            rows.append({"id": q["id"], "ok": bool(good), "secs": round(secs, 1), "cited": resp.cited,
-                         "answer": resp.text[:300]})
-            console.print(f"  {'[green]ok[/]' if good else '[red]x[/] '} {q['id']} ({secs:.1f}s) {resp.text[:90]!r}")
+                if q.get("must_include"):
+                    n_kw += 1
+                    missing = missing_terms(resp.text, q["must_include"])
+                    ok_kw += good and not missing
+            rows.append({"id": q["id"], "ok": bool(good) and not missing, "secs": round(secs, 1), "cited": resp.cited,
+                         "missing": missing, "answer": resp.text[:300]})
+            note = f" [yellow]missing: {', '.join(missing)}[/]" if missing else ""
+            console.print(f"  {'[green]ok[/]' if good and not missing else '[red]x[/] '} {q['id']} ({secs:.1f}s) {resp.text[:90]!r}{note}")
     finally:
         rag.close()
-    summary = {"in_scope_answered_with_citations": f"{ok_in}/{n_in}", "out_of_scope_refused": f"{ok_out}/{n_out}"}
+    summary = {"in_scope_answered_with_citations": f"{ok_in}/{n_in}", "in_scope_with_expected_words": f"{ok_kw}/{n_kw}",
+               "out_of_scope_refused": f"{ok_out}/{n_out}"}
     console.print(summary)
     return {"summary": summary, "rows": rows}
 
