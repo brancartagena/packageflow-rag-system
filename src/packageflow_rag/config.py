@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     ollama_num_ctx: int = 8192
     ollama_timeout: float = 300.0          # seconds; first call loads the model and can be slow
     ollama_keep_alive: str = "30m"         # how long Ollama keeps the chat model loaded after an answer (its own default is 5m)
+    ollama_think: bool = False             # thinking models (qwen3.5, deepseek-r1...) write hidden reasoning first; keep off so the answer limit isn't used up
     llm_temperature: float = 0.1
     embed_model: str = "qwen3-embedding:0.6b"
     embed_batch_size: int = 16

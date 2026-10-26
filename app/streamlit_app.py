@@ -167,7 +167,7 @@ except Exception as e:
 
 # ---------- sidebar ----------
 with st.sidebar:
-    st.markdown('<div class="pf-brand"><span class="pf-logo">📦</span>PackageFlow Docs</div>', unsafe_allow_html=True)
+    st.markdown('<div class="pf-brand"><span class="pf-logo">📦</span>PackageFlow Docs123</div>', unsafe_allow_html=True)
     meta = rag.store.meta() or {}
     st.markdown(f'<div class="pf-meta">{settings.ollama_chat_model} · {meta.get("embed_model")}<br>'
                 f'{len(rag.retriever.chunks)} chunks · indexed {meta.get("updated_at") or meta.get("created_at")}</div>',

@@ -83,7 +83,7 @@ class RAG:
             self.store.check_model(getattr(self.embedder, "model", c.embed_model))
         self.generator = generator or OllamaGenerator(c.ollama_chat_model, c.ollama_host, c.ollama_num_ctx,
                                                       c.llm_temperature, c.ollama_timeout, c.answer_max_tokens,
-                                                      c.ollama_keep_alive)
+                                                      c.ollama_keep_alive, c.ollama_think)
         self.retriever = Retriever(self.store, self.embedder, c.candidate_k, c.rrf_k)
 
     @property

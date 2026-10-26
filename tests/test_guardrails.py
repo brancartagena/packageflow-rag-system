@@ -213,4 +213,5 @@ def test_chat_call_asks_ollama_to_keep_the_model_loaded(tmp_path, fake_ollama):
     rag.ask("Which database stores packages?").consume()
     chat_call = [r for p, r in fake_ollama.calls if p == "/api/chat"][-1]
     assert chat_call["keep_alive"] == "30m"
+    assert chat_call["think"] is False        # thinking models are told not to write hidden reasoning
     rag.close()

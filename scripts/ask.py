@@ -57,7 +57,10 @@ def run_one(rag: RAG, question: str, doc_type, role, top_k, retrieval_only, mode
     for tok in resp:
         console.print(tok, end="", markup=False, highlight=False)
     console.print("\n")
-    if resp.raw and resp.text != resp.raw:
+    if not resp.gated and not resp.raw.strip():
+        console.print("[yellow](the model returned an empty answer)[/]")
+        console.print(resp.text, markup=False, highlight=False)
+    elif resp.raw and resp.text != resp.raw:
         console.rule("Cleaned answer")
         console.print(resp.text, markup=False, highlight=False)
         console.print(f"[dim](guardrail fixes: {', '.join(resp.fixes) or 'trimmed'})[/]")
